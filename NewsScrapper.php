@@ -1,30 +1,41 @@
 <?php
 
+$servername = "127.0.0.1";
+$username = "root";
+$password = "";
+$dbname = "news";
+
+
+
 require 'vendor/autoload.php';
 
 
 use Goutte\Client;
 
-function scrapePage($url, $client, $file)
+function scrapePage($url, $client, $file, $conn)
 {
+
+    $sql = "SELECT 'title' FROM `news`";
+    $dataRes = array();
+    $Existingresult = $conn->mysql_query($sql);
+
+    print($Existingresult);
+    
     $crawler = $client->request('GET', $url);
 
-    $crawler->filter('.card-item')->each(function ($node) use ($file) {
+    $crawler->filter('.card-item')->each(function ($node) use ($conn, $dataRes) {
         $title = $node->filter('.card-item__title')->text();
         $dateCreated = $node->filter('.symbol-text > time')->text();
         $imageUrl = $node->filter('img')->attr('src');
         $comments = $node->filter('.symbol-text > span')->text();
 
-        // store data in a received array
-
-        fputcsv($file, [$title, $dateCreated, $imageUrl,  $comments ]);
-
-        // SQL command to select title and id   SELECT `id`, `title` FROM `news` WHERE 1
-        // check if the result if not null, if null skip to adding to database, if not null store values in an current extisiting array
-        // use for loop to see if the data incoming exists in our current existing array if not intsert the value to the db table
-        // SQL command to insert  INSERT INTO `news`(`id`, `title`, `image`, `date_added`, `comment_count`) VALUES ('[value-1]','[value-2]','[value-3]','[value-4]','[value-5]')
-        // if it is existing check the update the date_added and the comment count
-        // SQL update Database UPDATE `news` SET `date_added`='[value-4]',`comment_count`='[value-5]' WHERE `id`= id
+        if (in_array($title, $dataRes, TRUE)) {
+            $updatesql = "UPDATE `news` SET `date_added`='$dateCreated' ,`comment_count`= '$comments' WHERE `title`= '$title'";
+              $conn->query($updatesql);
+        } else {
+             $instertSql = "INSERT INTO `news`(`id`,`title`, `image`, `date_added`, `comment_count`) VALUES (NULL,'$title', '$imageUrl', '$dateCreated' ,'$comments')";
+              $conn->query($instertSql);
+        }
 
     });
 
@@ -40,11 +51,14 @@ function scrapePage($url, $client, $file)
 $client = new Client();
 $file = fopen("news.csv", "w");
 $url = "https://www.gamespot.com/news/";
+$conn = new mysqli($servername, $username, $password, $dbname);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
 
 while ($url) {
     echo "<h2>" . $url . "</h2>" . PHP_EOL;
-    $url = scrapePage($url, $client, $file);
+    $url = scrapePage($url, $client, $file, $conn);
 }
+$conn->close();
 fclose($file);
-
-
